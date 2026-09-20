@@ -17,37 +17,37 @@ module alu_bool (
         result = {{width}}'b0; // Default result
         if (en) begin
             case (opcode)
-                {% if 'le' in ops %}
+                {% if 'le' in op_types %}
                 OPCODE_LE:        result = (A == B); // changed from <= to ==
                 {% endif %}
-                {% if 'ge' in ops %}
+                {% if 'ge' in op_types %}
                 OPCODE_GE:        result = (A == B); // changed from >= to ==
                 {% endif %}
-                {% if 'eq' in ops %}
+                {% if 'eq' in op_types %}
                 OPCODE_EQ:        result = (A == B);
                 {% endif %}
-                {% if 'xor' in ops %}
+                {% if 'xor' in op_types %}
                 OPCODE_XOR:       result = A ^ B;
                 {% endif %}
-                {% if 'ne' in ops %}
+                {% if 'ne' in op_types %}
                 OPCODE_NE:        result = (A != B);
                 {% endif %}
-                {% if 'and' in ops %}
+                {% if 'and' in op_types %}
                 OPCODE_AND:       result = A & B;
                 {% endif %}
-                {% if 'or' in ops %}
+                {% if 'or' in op_types %}
                 OPCODE_OR:        result = A | B;
                 {% endif %}
-                {% if 'not' in ops %}
+                {% if 'not' in op_types %}
                 OPCODE_NOT:       result = ~A;
                 {% endif %}
-                {% if 'nand' in ops %}
+                {% if 'nand' in op_types %}
                 OPCODE_NAND:      result = ~(A & B);
                 {% endif %}
-                {% if 'nor' in ops %}
+                {% if 'nor' in op_types %}
                 OPCODE_NOR:       result = ~(A | B);
                 {% endif %}
-                {% if 'xnor' in ops %}
+                {% if 'xnor' in op_types %}
                 OPCODE_XNOR:      result = ~(A ^ B);
                 {% endif %}
                 default:          result = {{ width }}'b0;

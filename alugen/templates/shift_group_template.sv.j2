@@ -1,4 +1,4 @@
-// Core logic:
+{% set op_types = ops | map(attribute='op_type') | list %}// Core logic:
 module alu_shift (
     input logic [{{ width-1 }}:0] A,
     input logic [{{ width-1 }}:0] B,
@@ -23,16 +23,16 @@ module alu_shift (
 
     // Fill bit & control signal definition
     logic fill;
-    {% if 'lsl' in ops %}
+    {% if 'lsl' in op_types %}
     logic shift_left;
     {% endif %}
-    {% if 'lsr' in ops or 'asr' in ops %}
+    {% if 'lsr' in op_types or 'asr' in op_types %}
     logic shift_right;
     {% endif %}
-    {% if 'ror' in ops %}
+    {% if 'ror' in op_types %}
     logic rotate_right;
     {% endif %}
-    {% if 'rol' in ops %}
+    {% if 'rol' in op_types %}
     logic rotate_left;
     {% endif %}
 
@@ -41,45 +41,45 @@ module alu_shift (
         {% for i in range(1, log2_width + 1) %}
         stage{{ i }} = {{ width }}'b0; // Default stage value;
         {% endfor %}
-        {% if 'lsl' in ops %}
+        {% if 'lsl' in op_types %}
         shift_left = 1'b0; // Default shift direction
         {% endif %}
-        {% if 'lsr' in ops or 'asr' in ops %}
+        {% if 'lsr' in op_types or 'asr' in op_types %}
         shift_right = 1'b0; // Default shift direction
         {% endif %}
-        {% if 'ror' in ops %}
+        {% if 'ror' in op_types %}
         rotate_right = 1'b0; // Default rotation direction
         {% endif %}
-        {% if 'rol' in ops %}
+        {% if 'rol' in op_types %}
         rotate_left = 1'b0; // Default rotation direction
         {% endif %}
         fill = 1'b0; // Default fill bit
         if (en) begin
             case (opcode) // asr, ror, rol, lsr
-                {% if 'lsl' in ops %} 
+                {% if 'lsl' in op_types %} 
                 OPCODE_LSL: begin
                     fill = 1'b0; // Fill bit for logical shift
                     shift_left = 1'b1; // Logical shift left
                 end
                 {% endif %}
-                {% if 'lsr' in ops %}
+                {% if 'lsr' in op_types %}
                 OPCODE_LSR: begin
                     fill = 1'b0; // Fill bit for logical shift
                     shift_right = 1'b1; // Logical shift right
                 end
                 {% endif %}
-                {% if 'asr' in ops %}
+                {% if 'asr' in op_types %}
                 OPCODE_ASR: begin
                     fill = A[{{ width-1 }}]; // Fill bit for arithmetic shift
                     shift_right = 1'b1; // Logical shift right
                 end
                 {% endif %}
-                {% if 'ror' in ops %}
+                {% if 'ror' in op_types %}
                 OPCODE_ROR: begin
                     rotate_right = 1'b1; // Rotate right
                 end
                 {% endif %}
-                {% if 'rol' in ops %}
+                {% if 'rol' in op_types %}
                 OPCODE_ROL: begin
                     rotate_left = 1'b1; // Rotate left
                 end
@@ -92,22 +92,22 @@ module alu_shift (
             {% for i in range(0, log2_width) %}
             {% set shift_amt = 2**i %}
             if (shamt[{{ i }}]) begin
-                {% if 'lsl' in ops %}
+                {% if 'lsl' in op_types %}
                 if (shift_left) begin
                     stage{{ i+1 }} = {{ '{' }}stage{{ i }}[{{ width - shift_amt - 1 }}:0],  {{ '{' }}{{ shift_amt }}{{ '{' }}fill{{ '}' }}{{ '}' }}{{ '}' }};
                 end else
                 {% endif %}
-                {% if 'lsr' in ops or 'asr' in ops %}
+                {% if 'lsr' in op_types or 'asr' in op_types %}
                 if (shift_right) begin
                     stage{{ i+1 }} = {{ '{' }}{{ '{' }}{{ shift_amt }}{{ '{' }}fill{{ '}' }}{{ '}' }}, stage{{ i }}[{{ width - 1 }}:{{ shift_amt }}]{{ '}' }};                
                 end
                 {% endif %}
-                {% if 'rol' in ops %}
+                {% if 'rol' in op_types %}
                 if (rotate_left) begin
                     stage{{ i+1 }} = {{ '{' }}stage{{ i }}[{{ width - shift_amt - 1 }}:0], stage{{ i }}[{{ width-1 }}:{{ width - shift_amt }}]{{ '}' }};
                 end else
                 {% endif %}
-                {% if 'ror' in ops %}
+                {% if 'ror' in op_types %}
                 if (rotate_right) begin
                     stage{{ i+1 }} = {{ '{' }}stage{{ i }}[{{ shift_amt - 1 }}:0], stage{{ i }}[{{ width - 1 }}:{{ shift_amt }}]{{ '}' }};
                 end

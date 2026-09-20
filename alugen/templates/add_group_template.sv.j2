@@ -101,7 +101,7 @@ module alu_add (
                 {% if has_ge.value %}
                 OPCODE_GE: result_internal = { {{ width - 1 }}'b0, ge_result };
                 {% endif %}
-                default: result_internal = {{ width }}'b0;
+                default: result_internal = add_sub_result; // enabled => add path (fma)
             endcase
         end else begin
             result_internal = '0;
