@@ -13,12 +13,23 @@ class ALUGenerator:
     an instance of ALUConfig class from the `alu_config` module.
     """
 
-    def __init__(self, config: "ArchModule", output_dir: str = "src"):
+    def __init__(
+        self,
+        config: "ArchModule",
+        output_dir: str = "src",
+        submodule_prefix: str = "",
+    ):
         """
         Initialize the ALUGenerator with a configuration and output directory.
+
+        submodule_prefix is prepended to the shared submodules (alu_<group>,
+        mux_generic) and their files. Two ALUs with different operation sets
+        in one design need distinct prefixes, or their submodules collide.
+        The default keeps the historical names.
         """
         self.config = config
         self.output_dir = output_dir
+        self.prefix = submodule_prefix
         # === Jinja2 Rendering === #
         # Get the directory where this file is located and find templates relative to it
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -158,22 +169,30 @@ class ALUGenerator:
         # Print flattened_ops
         print(f"Flattened ops: {flattened_ops}")
 
-        # fma is wired entirely in the top-level — no standalone module needed
-        _TOP_LEVEL_ONLY_GROUPS = {"fma"}
+        # fma and mulhi are wired entirely in the top-level — no standalone
+        # module. Both reuse the mul group's multiplier.
+        _TOP_LEVEL_ONLY_GROUPS = {"fma", "mulhi"}
+        if "mulhi" in active_groups and "mul" not in active_groups:
+            raise ValueError("mulhi needs mul in the same ALU (it shares the multiplier).")
+        mulhi_ops = active_groups.get("mulhi", [])
 
         for group in active_groups:
             if group in _TOP_LEVEL_ONLY_GROUPS:
                 continue
             template = self.env.get_template(f"{group}_group_template.sv.j2")
+            group_ops = active_groups[group]
+            # The mul group also decodes mulhi, which it serves.
+            decoded = group_ops + (mulhi_ops if group == "mul" else [])
             rendered = template.render(
-                module_name=f"alu_{group}",
+                module_name=f"{self.prefix}alu_{group}",
                 width=dora_width,
                 log2_width=math.ceil(math.log2(dora_width)),
                 op_width=op_width,
-                ops=active_groups[group],
-                op_code={op: default_opcodes[op] for op in active_groups[group]},
+                ops=group_ops,
+                mulhi_ops=mulhi_ops if group == "mul" else [],
+                op_code={op: default_opcodes[op] for op in decoded},
             )
-            self._write_file(f"alu_{group}.sv", rendered)
+            self._write_file(f"{self.prefix}alu_{group}.sv", rendered)
 
         # === Control Module === #
         control_template = self.env.get_template("control_module_template.sv.j2")
@@ -199,15 +218,19 @@ class ALUGenerator:
             group_list=group_list,
             active_group_count=len(active_groups),
             sel_width=sel_width,
+            prefix=self.prefix,
         )
         self._write_file(f"{self.module_name}.sv", top_rendered)
 
         # === Mux === #
         mux_template = self.env.get_template("Mux_template.sv.j2")
         mux_rendered = mux_template.render(
-            group_list=group_list, num_inputs=len(group_list), width=dora_width
+            module_name=f"{self.prefix}mux_generic",
+            group_list=group_list,
+            num_inputs=len(group_list),
+            width=dora_width,
         )
-        self._write_file("mux_generic.sv", mux_rendered)
+        self._write_file(f"{self.prefix}mux_generic.sv", mux_rendered)
 
     def _write_file(self, filename: str, content: str):
         path = os.path.join(self.output_dir, filename)

@@ -1,8 +1,13 @@
 {% set has_fma = "fma" in group_list %}
+{% set has_mulhi = "mulhi" in group_list %}
 {% if has_fma %}
 {% set add_idx = group_list.index("add") %}
 {% set mul_idx = group_list.index("mul") %}
 {% set fma_idx = group_list.index("fma") %}
+{% endif %}
+{% if has_mulhi %}
+{% set mul_idx = group_list.index("mul") %}
+{% set mulhi_idx = group_list.index("mulhi") %}
 {% endif %}
 module {{ module_name }} (
   input  logic                    clk_i,
@@ -47,7 +52,12 @@ module {{ module_name }} (
 
   // --- Effective enables: fma needs both mul and add to run ---
   logic en_mul_eff, en_add_eff;
+  {% if has_mulhi %}
+  // mulhi reads the high half of the same multiplier
+  assign en_mul_eff = en[{{mul_idx}}] | en[{{fma_idx}}] | en[{{mulhi_idx}}];
+  {% else %}
   assign en_mul_eff = en[{{mul_idx}}] | en[{{fma_idx}}];
+  {% endif %}
   assign en_add_eff = en[{{add_idx}}] | en[{{fma_idx}}];
 
   // --- Bypass muxes for add inputs ---
@@ -69,16 +79,30 @@ module {{ module_name }} (
   {% if group == "fma" %}
   // fma: no module — result forwarded from alu_add output
   assign temp[{{i}}] = temp[{{add_idx}}];
+  {% elif group == "mulhi" %}
+  // mulhi: no module — temp[{{i}}] is driven by the mul group's result_hi
   {% elif group == "mul" and has_fma %}
-  alu_mul alu_mul_inst_{{i}} (
+  {{prefix}}alu_mul alu_mul_inst_{{i}} (
     .A     (A_data),
     .B     (B_data),
     .opcode(prog_data_i),
     .en    (en_mul_eff),
+    {% if has_mulhi %}
+    .result_hi(temp[{{mulhi_idx}}]),
+    {% endif %}
+    .result(temp[{{i}}])
+  );
+  {% elif group == "mul" and has_mulhi %}
+  {{prefix}}alu_mul alu_mul_inst_{{i}} (
+    .A     (A_data),
+    .B     (B_data),
+    .opcode(prog_data_i),
+    .en    (en[{{mul_idx}}] | en[{{mulhi_idx}}]),
+    .result_hi(temp[{{mulhi_idx}}]),
     .result(temp[{{i}}])
   );
   {% elif group == "add" and has_fma %}
-  alu_add alu_add_inst_{{i}} (
+  {{prefix}}alu_add alu_add_inst_{{i}} (
     .A     (add_a_in),
     .B     (add_b_in),
     .opcode(prog_data_i),
@@ -86,7 +110,7 @@ module {{ module_name }} (
     .result(temp[{{i}}])
   );
   {% else %}
-  alu_{{group}} alu_{{group}}_inst_{{i}} (
+  {{prefix}}alu_{{group}} alu_{{group}}_inst_{{i}} (
     .A     (A_data),
     .B     (B_data),
     .opcode(prog_data_i),
@@ -97,7 +121,7 @@ module {{ module_name }} (
   {% endfor %}
 
   // --- Output mux ---
-  mux_generic mux_generic_inst (
+  {{prefix}}mux_generic mux_generic_inst (
     {% for group in group_list %}
     .in_{{group}} ( temp[{{loop.index0}}] ),
     {% endfor %}

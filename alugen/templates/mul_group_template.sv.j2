@@ -1,14 +1,17 @@
 // alu_{{ width }}bit_mul.sv
-module alu_mul (
+module {{ module_name }} (
     input  logic [{{ width-1 }}:0] A,
     input  logic [{{ width-1 }}:0] B,
     input  logic [{{ op_width - 1 }}:0] opcode,
     input  logic en,
+{% if mulhi_ops %}
+    output logic [{{ width-1 }}:0] result_hi,
+{% endif %}
     output logic [{{ width-1 }}:0] result
 );
 
     // Opcode constants
-    {% for op in ops %}
+    {% for op in ops + mulhi_ops %}
     localparam [{{ op_width - 1 }}:0] OPCODE_{{ op.op_type | upper }} = {{ op_width }}'b{{ op_code[op] }};
     {% endfor %}
 
@@ -19,7 +22,17 @@ module alu_mul (
     // to the ALU result width (W) to match the existing ALU result conventions.
 
     localparam int W = {{ width }};
+{% if mulhi_ops %}
+    // mulhi needs the high half of an UNSIGNED product too, so the multiplier
+    // B is taken as a (W+2)-bit signed value -- radix-4 Booth wants an even
+    // width -- sign-extended for mul/mulhi_s and zero-extended for mulhi_u, and
+    // the multiplicand A likewise. That costs one more Booth partial product;
+    // the low W bits are the same either way.
+    localparam int BW = W + 2;
+    localparam int PP = (BW + 1) / 2; // number of radix-4 partial products
+{% else %}
     localparam int PP = (W + 1) / 2; // number of radix-4 partial products
+{% endif %}
 
     // partial products (signed), full precision 2*W bits
     logic signed [2*W-1:0] pp [0:PP-1];
@@ -28,7 +41,20 @@ module alu_mul (
 
     // sign-extend multiplicand to 2*W bits for signed operations
     logic signed [2*W-1:0] m_ext;
+{% if mulhi_ops %}
+    logic [BW:0] b_ext; // extra LSB 0 for Booth encoding
+{% else %}
     logic [W:0] b_ext; // extra LSB 0 for Booth encoding
+{% endif %}
+{% if mulhi_ops %}
+    {% set uops = mulhi_ops | selectattr("op_type", "equalto", "mulhi_u") | list %}
+    logic uns;
+    {% if uops %}
+    assign uns = (opcode == OPCODE_MULHI_U);
+    {% else %}
+    assign uns = 1'b0;
+    {% endif %}
+{% endif %}
 
     integer i;
     logic [2:0] trip;
@@ -45,8 +71,13 @@ module alu_mul (
         end
 
         // extend operands
+{% if mulhi_ops %}
+        m_ext = $signed({ {W{uns ? 1'b0 : A[W-1]}}, A });
+        b_ext = { {2{uns ? 1'b0 : B[W-1]}}, B, 1'b0 };
+{% else %}
         m_ext = $signed({{ width }}'(A));
         b_ext = { B, 1'b0 };
+{% endif %}
 
         if (en) begin
             // generate radix-4 Booth partial products
@@ -57,9 +88,10 @@ module alu_mul (
                 idx_mid = 2*i + 1;
                 idx_lo = 2*i;
                 // safely extract bits (if out-of-range, treat as 0)
-                trip[2] = (idx_hi <= W) ? b_ext[idx_hi] : 1'b0;
-                trip[1] = (idx_mid <= W) ? b_ext[idx_mid] : 1'b0;
-                trip[0] = (idx_lo <= W) ? b_ext[idx_lo] : 1'b0;
+{% set top = "BW" if mulhi_ops else "W" %}
+                trip[2] = (idx_hi <= {{ top }}) ? b_ext[idx_hi] : 1'b0;
+                trip[1] = (idx_mid <= {{ top }}) ? b_ext[idx_mid] : 1'b0;
+                trip[0] = (idx_lo <= {{ top }}) ? b_ext[idx_lo] : 1'b0;
 
                 // Booth encoding radix-4
                 // 000 -> 0; 001/010 -> +1*M; 011 -> +2*M;
@@ -87,5 +119,9 @@ module alu_mul (
 
     // truncate to ALU result width (lower W bits) — matches existing ALU result conventions
     assign result = product_full[W-1:0];
+{% if mulhi_ops %}
+    // high W bits: mul.hi
+    assign result_hi = product_full[2*W-1:W];
+{% endif %}
 
 endmodule
