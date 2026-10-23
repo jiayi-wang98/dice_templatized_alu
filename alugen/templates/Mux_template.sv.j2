@@ -1,4 +1,4 @@
-module mux_generic (
+module {{ module_name }} (
     {% for group in group_list %}
     input  logic [{{ width-1 }}:0] in_{{ group }},
     {% endfor %}

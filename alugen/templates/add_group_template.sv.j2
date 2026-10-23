@@ -14,7 +14,7 @@
   {% if op.op_type | upper == 'LE' %}{% set has_le.value = true %}{% endif %}
   {% if op.op_type | upper == 'GE' %}{% set has_ge.value = true %}{% endif %}
 {% endfor %}
-module alu_add (
+module {{ module_name }} (
     input  logic [{{ width-1 }}:0] A,
     input  logic [{{ width-1 }}:0] B,
     input  logic [{{ op_width - 1 }}:0] opcode,

@@ -1,5 +1,5 @@
 {% set op_types = ops | map(attribute='op_type') | list %}// Core logic:
-module alu_shift (
+module {{ module_name }} (
     input logic [{{ width-1 }}:0] A,
     input logic [{{ width-1 }}:0] B,
     input logic [{{ op_width-1 }}:0] opcode,

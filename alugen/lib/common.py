@@ -42,6 +42,9 @@ _BOOL_BINARY_OPS = ["xor", "eq", "ne", "and", "or", "nand", "nor", "xnor"]  # 2-
 # --- shift group op list ---
 _SHIFT_OPS = ["lsl", "lsr", "asr", "rol", "ror"]  # int/uint only (undefined for floats)
 
+# --- mulhi group op list ---
+_MULHI_OPS = ["mulhi_s", "mulhi_u"]  # signed x signed, unsigned x unsigned
+
 # operations are not groups here but renderer needs some classification to know which alus to generate or not generate
 OPERATIONS_US: Dict[str, List[Operation]] = {
     "add": [
@@ -81,5 +84,14 @@ OPERATIONS_US: Dict[str, List[Operation]] = {
         # A*B+C: 3 inputs, numeric output, all numeric types
         Operation("fma", 3, (t, t, t, t))
         for t in _ALL_NUM_TYPES
+    ],
+    # High half of the full 2W-bit product (PTX mul.hi.s32 / mul.hi.u32).
+    # Integer only. Wired in the top level onto the mul group's multiplier, so
+    # it needs "mul" in the same ALU. Listed after fma so that adding it leaves
+    # every existing opcode where it was.
+    "mulhi": [
+        Operation(op, 2, (t, t, t))
+        for op in _MULHI_OPS
+        for t in _INT_UINT_TYPES
     ],
 }
