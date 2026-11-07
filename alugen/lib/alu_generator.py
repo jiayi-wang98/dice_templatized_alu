@@ -18,6 +18,7 @@ class ALUGenerator:
         config: "ArchModule",
         output_dir: str = "src",
         submodule_prefix: str = "",
+        latency_cycles: int = 2,
     ):
         """
         Initialize the ALUGenerator with a configuration and output directory.
@@ -27,6 +28,9 @@ class ALUGenerator:
         in one design need distinct prefixes, or their submodules collide.
         The default keeps the historical names.
         """
+        if latency_cycles not in (1, 2):
+            raise ValueError("ALU latency must be one or two cycles")
+        self.latency_cycles = latency_cycles
         self.config = config
         self.output_dir = output_dir
         self.prefix = submodule_prefix
@@ -111,6 +115,16 @@ class ALUGenerator:
                         f"Cross-type operations are not supported."
                     )
 
+        transport_width = dora_width
+        widths = {typ.bit_width for binding in user_ops.values()
+                  for typ in (*binding.operation.signature.input_types,
+                              *binding.operation.signature.output_types)}
+        if len(widths) != 1:
+            raise ValueError("ALU generation requires a single arithmetic width")
+        dora_width = widths.pop()
+        if dora_width > transport_width:
+            raise ValueError("ALU arithmetic width exceeds transport width")
+
         # === Output File Directory === #
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -124,9 +138,9 @@ class ALUGenerator:
             for op in members:
                 for binding in user_ops.values():
                     binding_type_ids = tuple(
-                        b.port.datatype.type_id for b in binding.input_bindings
+                        typ.type_id for typ in binding.operation.signature.input_types
                     ) + tuple(
-                        b.port.datatype.type_id for b in binding.output_bindings
+                        typ.type_id for typ in binding.operation.signature.output_types
                     )
                     if (
                         op.op_type == binding.operation.mnemonic
@@ -210,6 +224,8 @@ class ALUGenerator:
         top_template = self.env.get_template("top_level_alu_template_v1.sv.j2")
 
         top_rendered = top_template.render(
+            latency_cycles=self.latency_cycles,
+            transport_width=transport_width,
             module_name=self.module_name,
             width=dora_width,
             ops=flattened_ops,
